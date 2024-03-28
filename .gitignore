@@ -30,3 +30,7 @@
 *.exe
 *.out
 *.app
+/third_party
+/x64-Debug
+/.vs
+/CMakeSettings.json
