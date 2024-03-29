@@ -1,10 +1,15 @@
 #pragma once
 
 #include "vk_types.h"
+#include "vk_descriptors.h"
+#include "vk_camera.h"
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <VkBootstrap.h>
+
+#include <functional>
+
 
 // from: https://stackoverflow.com/a/57595105
 template <typename T, typename... Rest>
@@ -12,7 +17,6 @@ void hashCombine(std::size_t& seed, const T& v, const Rest&... rest) {
 	seed ^= std::hash<T>{}(v)+0x9e3779b9 + (seed << 6) + (seed >> 2);
 	(hashCombine(seed, rest), ...);
 };
-
 
 //------OG VULKAN TUTO-------//
 struct UniformBufferObject {
@@ -76,7 +80,6 @@ struct DeletionQueue
 struct FrameData {
 	VkSemaphore _swapchainSemaphore, _renderSemaphore;
 	VkFence _renderFence;
-	VkCommandPool _commandPool;
 	VkCommandBuffer _mainCommandBuffer;
 	DeletionQueue _deletionQueue;
 };
@@ -90,6 +93,12 @@ public:
 	GLFWwindow* _window;
 	DeletionQueue _mainDeletionQueue;
 	
+	VmaAllocator _allocator;
+	VkCommandPool _commandPool;
+	//draw resources
+	AllocatedImage _drawImage;
+	VkExtent2D _drawExtent;
+
 	VkInstance _instance;// Vulkan library handle
 	VkDebugUtilsMessengerEXT _debug_messenger;// Vulkan debug output handle
 	VkPhysicalDevice _chosenGPU;// GPU chosen as the default device
@@ -135,6 +144,101 @@ private:
 	void init_sync_structures();
 	void create_swapchain(uint32_t width, uint32_t height);
 	void destroy_swapchain();
+	void draw_background(VkCommandBuffer cmd);
+
+	MyCamera _camera;
+
+	//>------for DEFERRED-------//
+	AllocatedImage _gPosition;
+	AllocatedImage _gNormal;
+	AllocatedImage _gAlbedoSpec;
+
+	DescriptorAllocator globalDescriptorAllocator;
+	VkDescriptorSet _drawImageDescriptorSet;
+	VkDescriptorSetLayout _drawImageDescriptorLayout;
+
+	VkSampler _defaultSamplerLinear;
+	VkSampler _defaultSamplerNearest;
+
+	VkPipelineLayout _secondPassPipelineLayout;
+	VkPipeline _secondPassPipeline;
+
+	void init_images();
+	void init_descriptors();
+	void init_secondPass_pipeline();
+
+	//<-------for DEFERRED------//
+	//>old pipeline
+	void createGraphicsPipeline(const std::string& vertShaderPath, const std::string& fragShaderPath, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout);
+	VkShaderModule createShaderModule(const std::vector<char>& code);
+	static std::vector<char> readFile(const std::string& filename); //for shader
+	AllocatedImage _depthImage;
+	AllocatedImage _secondPassImage;
+
+	VkPipeline graphicsPipeline;
+	VkPipeline graphicsPipeline2;
+	VkPipelineLayout pipelineLayout;
+	VkPipelineLayout pipelineLayout2;
+
+	//<old pipeline
+
+	//>----------LVE VULKAN TUTO-----------//
+	// >first tuto
+	void createDescriptorPool();
+	void createDescriptorSets();
+	void createDescriptorSet2();
+
+	void updateUniformBuffer(uint32_t currentImage, const MyCamera& camera, const uint32_t& scalar, const glm::vec4& pos);
+	void createUniformBuffers();
+	void createNupdateUniformBuffers();
+	void createDescriptorSetLayout(); // !! we create two descriptor set layouts
+
+	glm::mat4 setPerspectiveProjection(float fovy, float aspect, float near, float far);
+
+	VkDescriptorSetLayout descriptorSetLayout;
+	VkDescriptorSetLayout descriptorSetLayout2;
+
+	VkDescriptorPool descriptorPool;
+	std::vector<VkDescriptorSet> descriptorSets;
+	VkDescriptorSet descriptorSets2;
+
+	VkBuffer uniformBuffers2;
+	VkDeviceMemory uniformBuffersMemory2;
+	void* uniformBuffersMapped2;
+
+	std::vector<VkBuffer> uniformBuffers;
+	std::vector<VkDeviceMemory> uniformBuffersMemory;
+	std::vector<void*> uniformBuffersMapped;
+
+	// <first tuto
+	//>--model loading
+	void loadModel(const std::string& filepath, std::vector<uint32_t>& indices, std::vector<Vertex>& vert);
+	
+	std::vector<uint32_t> _indicesLight;
+	std::vector<Vertex> _verticesLight;
+
+	std::vector<uint32_t> _indicesObject;
+	std::vector<Vertex> _verticesObject;
+	
+	void createVertexBuffer(const std::vector<Vertex>& vertices, VkBuffer&, VkDeviceMemory&);
+	void createIndexBuffer(const std::vector<uint32_t>& indices, VkBuffer&, VkDeviceMemory&);
+
+	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+	void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+	uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+
+	//<--model loading
+
+	VkBuffer vertexBufferLight;
+	VkDeviceMemory vertexBufferMemoryLight;
+	VkBuffer indexBufferLight;
+	VkDeviceMemory indexBufferMemoryLight;
+
+	VkBuffer vertexBufferObject;
+	VkDeviceMemory vertexBufferMemoryObject;
+	VkBuffer indexBufferObject;
+	VkDeviceMemory indexBufferMemoryObject;
+	//<-----------LVE VULKAN TUTO-----------//
 };
 
 class KeyboardMovementController {
