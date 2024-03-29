@@ -51,7 +51,7 @@ void VulkanEngine::init()
 
     init_commands();
 
-    loadModel("../assets/sphere.obj", _indicesLight, _verticesLight);
+    loadModel("../assets/sphere2.obj", _indicesLight, _verticesLight);
     loadModel("../assets/models/smooth_vase.obj", _indicesObject, _verticesObject);
     createVertexBuffer(_verticesLight, vertexBufferLight, vertexBufferMemoryLight);
     createIndexBuffer(_indicesLight, indexBufferLight, indexBufferMemoryLight);
@@ -105,51 +105,28 @@ void VulkanEngine::draw()
 {
     // wait until the gpu has finished rendering the last frame. Timeout of 1 sec
     VK_CHECK(vkWaitForFences(_device, 1, &get_current_frame()._renderFence, true, 1000000000));
-
     get_current_frame()._deletionQueue.flush();
-
-
-    updateUniformBuffer(_frameNumber % FRAME_OVERLAP, _camera, uint32_t{ 1 }, glm::vec4{ 0.f, 2.f, 0.f, 1.f });
-
+    updateUniformBuffer(_frameNumber % FRAME_OVERLAP, _camera, uint32_t{ 1 }, glm::vec4{ 0.f, 0.f, -5.f, 1.f });
     VK_CHECK(vkResetFences(_device, 1, &get_current_frame()._renderFence));
-    //request image from the swapchain
     uint32_t swapchainImageIndex;
     VK_CHECK(vkAcquireNextImageKHR(_device, _swapchain, 1000000000, get_current_frame()._swapchainSemaphore, nullptr, &swapchainImageIndex));
-
-    //naming it cmd for shorter writing
     VkCommandBuffer cmd = get_current_frame()._mainCommandBuffer;
-
-    // now that we are sure that the commands finished executing, we can safely
-    // reset the command buffer to begin recording again.
     VK_CHECK(vkResetCommandBuffer(cmd, 0));
-
-    //begin the command buffer recording. We will use this command buffer exactly once, so we want to let vulkan know that
     VkCommandBufferBeginInfo cmdBeginInfo = vkinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-
-    //start the command buffer recording
     VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
     //make the swapchain image into writeable mode before rendering
-    vkutil::transition_image(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+    vkutil::transition_image(cmd, _secondPassImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
     //depth image transition
     vkutil::transition_image(cmd, _depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
-    //make a clear-color from frame number. This will flash with a 120 frame period.
-    VkClearColorValue clearValue;
-    clearValue = { { 0.0f, 0.0f, 0.f, 1.0f } };
-
-    VkImageSubresourceRange clearRange = vkinit::image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT);
-
-    //clear image
-    vkCmdClearColorImage(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_GENERAL, &clearValue, 1, &clearRange);
-
-    VkRenderingAttachmentInfo colorAttachment = vkinit::attachment_info(_swapchainImageViews[swapchainImageIndex], nullptr, VK_IMAGE_LAYOUT_GENERAL);
+    VkClearValue clearColor;
+    clearColor.color = { 0.0f, 0.0f, 0.0f, 0.0f };
+    VkRenderingAttachmentInfo colorAttachment = vkinit::attachment_info(_secondPassImage.imageView, &clearColor, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
     VkRenderingAttachmentInfo depthAttachment = vkinit::depth_attachment_info(_depthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-
     VkRenderingInfo renderInfo = vkinit::rendering_info(_swapchainExtent, &colorAttachment, &depthAttachment, 1);
     vkCmdBeginRendering(cmd, &renderInfo);
 
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 
     VkViewport viewport{};
     viewport.x = 0.0f;
@@ -181,6 +158,8 @@ void VulkanEngine::draw()
         nullptr
     );
 
+    /*vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+
     VkBuffer vertexBuffers[] = { vertexBufferLight };
     VkDeviceSize offsets[] = { 0 };
 
@@ -188,7 +167,7 @@ void VulkanEngine::draw()
 
     vkCmdBindIndexBuffer(cmd, indexBufferLight, 0, VK_INDEX_TYPE_UINT32);
 
-    vkCmdDrawIndexed(cmd, static_cast<uint32_t>(_indicesLight.size()), 1, 0, 0, 0);
+    vkCmdDrawIndexed(cmd, static_cast<uint32_t>(_indicesLight.size()), 1, 0, 0, 0);*/
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline2);
 
@@ -208,7 +187,11 @@ void VulkanEngine::draw()
     vkCmdEndRendering(cmd);
 
     //make the swapchain image into presentable mode
-    vkutil::transition_image(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+    vkutil::transition_image(cmd, _secondPassImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+    vkutil::transition_image(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    vkutil::copy_image_to_image(cmd, _secondPassImage.image, _swapchainImages[swapchainImageIndex], _swapchainExtent, _swapchainExtent);
+    vkutil::transition_image(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+
 
     //finalize the command buffer (we can no longer add commands, but it can now be executed)
     VK_CHECK(vkEndCommandBuffer(cmd));
@@ -325,7 +308,7 @@ void VulkanEngine::init_swapchain()
     //depth image size will match the window
     VkExtent3D drawImageExtent = {
         _windowExtent.width,
-        _windowExtent.height,
+        _windowExtent.height, 
         1
     };
 
@@ -745,7 +728,7 @@ void VulkanEngine::createGraphicsPipeline(const std::string& vertShaderPath, con
         throw std::runtime_error("failed to create pipeline layout!");
     }
 
-    VkFormat colorAttachmentFormats[1] = { _swapchainImageFormat };
+    VkFormat colorAttachmentFormats[1] = { _secondPassImage.imageFormat };
 
     VkPipelineRenderingCreateInfo rfInfo = {
     .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR,
@@ -1013,7 +996,7 @@ void VulkanEngine::createNupdateUniformBuffers()
 
     //updating
     glm::vec3 translation{ 0.f, 0.f, 0.f };
-    glm::vec3 scale{ 2.f };
+    glm::vec3 scale{ 20.f };
     glm::vec3 rotation{ 0.f, 0.f, 0.f };
 
     glm::mat4 transform = glm::translate(glm::mat4{ 1.f }, translation);

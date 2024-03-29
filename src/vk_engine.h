@@ -259,9 +259,9 @@ public:
 	void moveInPlaneXZ(GLFWwindow* window, float dt);
 
 	KeyMappings keys{};
-	float moveSpeed{ 3.f };
+	float moveSpeed{ 10.f };
 	float lookSpeed{ 1.5f };
 
-	glm::vec3 translation{ 0.0f, -0.0f, -4.0f };
+	glm::vec3 translation{ 0.0f, -0.0f, -10.0f };
 	glm::vec3 rotation{};
 };
