@@ -68,9 +68,8 @@ void VulkanEngine::init()
     init_sync_structures();
     init_descriptors();
 
-    createGraphicsPipeline("../shaders/vertLight.spv", "../shaders/vertFrag.spv", graphicsPipeline, pipelineLayout);
-    createGraphicsPipeline("../shaders/vert.spv", "../shaders/frag.spv", graphicsPipeline2, pipelineLayout2);
-    //init_secondPass_pipeline();
+    createGPipeline("../shaders/vert.spv", "../shaders/frag.spv", gPipeline, gPipelineLayout);
+    init_secondPass_pipeline();
 
 
     // everything went fine
@@ -95,7 +94,7 @@ void VulkanEngine::run()
 
         _camera.setViewYXZ(cameraController.translation, cameraController.rotation);
 
-        _camera.setPerspectiveProjection(glm::radians(45.0f), _swapchainExtent.width / (float)_swapchainExtent.height, 0.1f, 100.0f);
+        _camera.setPerspectiveProjection(glm::radians(45.0f), _windowExtent.width / (float)_windowExtent.height, 0.1f, 100.0f);
 
         draw();
     }
@@ -115,32 +114,42 @@ void VulkanEngine::draw()
     VkCommandBufferBeginInfo cmdBeginInfo = vkinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
     VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
-    //make the swapchain image into writeable mode before rendering
-    vkutil::transition_image(cmd, _secondPassImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-    //depth image transition
-    vkutil::transition_image(cmd, _depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-
-    VkClearValue clearColor;
-    clearColor.color = { 0.0f, 0.0f, 0.0f, 0.0f };
-    VkRenderingAttachmentInfo colorAttachment = vkinit::attachment_info(_secondPassImage.imageView, &clearColor, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-    VkRenderingAttachmentInfo depthAttachment = vkinit::depth_attachment_info(_depthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-    VkRenderingInfo renderInfo = vkinit::rendering_info(_swapchainExtent, &colorAttachment, &depthAttachment, 1);
-    vkCmdBeginRendering(cmd, &renderInfo);
-
-
     VkViewport viewport{};
     viewport.x = 0.0f;
     viewport.y = 0.0f;
-    viewport.width = (float)_swapchainExtent.width;
-    viewport.height = (float)_swapchainExtent.height;
+    viewport.width = (float)_windowExtent.width;
+    viewport.height = (float)_windowExtent.height;
     viewport.minDepth = 0.0f;
     viewport.maxDepth = 1.0f;
     vkCmdSetViewport(cmd, 0, 1, &viewport);
 
     VkRect2D scissor{};
     scissor.offset = { 0, 0 };
-    scissor.extent = _swapchainExtent;
+    scissor.extent = _windowExtent;
     vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+    //make the gbuffer images transition
+    vkutil::transition_image(cmd, _gPosition.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    vkutil::transition_image(cmd, _gNormal.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    vkutil::transition_image(cmd, _gAlbedoSpec.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+   
+    //depth image transition
+    vkutil::transition_image(cmd, _depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+
+    VkClearValue clearColor1;
+    clearColor1.color = { 0.0f, 0.0f, 0.0f, 0.0f };
+    VkClearValue clearColor2;
+    clearColor2.color = { 0.0f, 1.0f, 0.0f, 0.0f };
+    VkClearValue clearColor3;
+    clearColor3.color = { 0.0f, 0.0f, 1.0f, 0.0f };
+    VkRenderingAttachmentInfo colorAttachment1 = vkinit::attachment_info(_gPosition.imageView, &clearColor1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    VkRenderingAttachmentInfo colorAttachment2 = vkinit::attachment_info(_gNormal.imageView, &clearColor1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    VkRenderingAttachmentInfo colorAttachment3 = vkinit::attachment_info(_gAlbedoSpec.imageView, &clearColor1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    VkRenderingAttachmentInfo colorAttachments[3] = { colorAttachment1, colorAttachment2, colorAttachment3 };
+
+    VkRenderingAttachmentInfo depthAttachment = vkinit::depth_attachment_info(_depthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+    VkRenderingInfo renderInfo = vkinit::rendering_info(_windowExtent, colorAttachments, &depthAttachment, 3);
+    vkCmdBeginRendering(cmd, &renderInfo);
 
     VkDescriptorSet descriptorSetsArray[] = {
     descriptorSets[_frameNumber % FRAME_OVERLAP], // Descriptor set at index 0
@@ -150,7 +159,7 @@ void VulkanEngine::draw()
     vkCmdBindDescriptorSets(
         cmd,
         VK_PIPELINE_BIND_POINT_GRAPHICS,
-        pipelineLayout,
+        gPipelineLayout,
         0, // First set to bind
         2, // Bind two descriptor sets
         descriptorSetsArray, // Array of descriptor sets
@@ -158,18 +167,7 @@ void VulkanEngine::draw()
         nullptr
     );
 
-    /*vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
-
-    VkBuffer vertexBuffers[] = { vertexBufferLight };
-    VkDeviceSize offsets[] = { 0 };
-
-    vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
-
-    vkCmdBindIndexBuffer(cmd, indexBufferLight, 0, VK_INDEX_TYPE_UINT32);
-
-    vkCmdDrawIndexed(cmd, static_cast<uint32_t>(_indicesLight.size()), 1, 0, 0, 0);*/
-
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline2);
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, gPipeline);
 
     // Bind vertex buffer for the second mesh
     VkBuffer vertexBuffers2[] = { vertexBufferObject }; // Assuming vertexBufferObject holds the vertex data for the second mesh
@@ -182,16 +180,52 @@ void VulkanEngine::draw()
 
     // Draw the second mesh
     vkCmdDrawIndexed(cmd, static_cast<uint32_t>(_indicesObject.size()), 1, 0, 0, 0); // Assuming _indicesObject.size() holds the number of indices for the second mesh
+    vkCmdEndRendering(cmd);
 
+    //second pass !!!!!!!!!!!!!!!!!!!!!!!
+    vkutil::transition_image(cmd, _secondPassImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+    vkutil::transition_image(cmd, _gNormal.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    vkutil::transition_image(cmd, _gPosition.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    vkutil::transition_image(cmd, _gAlbedoSpec.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+    VkRenderingAttachmentInfo secondPassColorAttachment = vkinit::attachment_info(_secondPassImage.imageView, &clearColor1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+    VkRenderingInfo secondPassRenderInfo = vkinit::rendering_info(_windowExtent, &secondPassColorAttachment, nullptr, 1);
+    vkCmdBeginRendering(cmd, &secondPassRenderInfo);
+    vkCmdSetViewport(cmd, 0, 1, &viewport);
+    vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+    VkDescriptorSet descriptorSetsArray2[] = {
+    descriptorSets[_frameNumber % FRAME_OVERLAP], // Descriptor set at index 0
+    _drawImageDescriptorSet // Descriptor set at index 1
+    };
+
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _secondPassPipeline);
+    vkCmdBindDescriptorSets(
+        cmd,
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        _secondPassPipelineLayout,
+        0, // First set to bind
+        2, // Bind two descriptor sets
+        descriptorSetsArray2, // Array of descriptor sets
+        0,
+        nullptr
+    );
+
+    vkCmdDraw(cmd, 3, 1, 0, 0);
 
     vkCmdEndRendering(cmd);
 
-    //make the swapchain image into presentable mode
+    //transtion the draw image and the swapchain image into their correct transfer layouts
     vkutil::transition_image(cmd, _secondPassImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
     vkutil::transition_image(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-    vkutil::copy_image_to_image(cmd, _secondPassImage.image, _swapchainImages[swapchainImageIndex], _swapchainExtent, _swapchainExtent);
-    vkutil::transition_image(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
+    // execute a copy from the draw image into the swapchain
+    vkutil::copy_image_to_image(cmd, _secondPassImage.image, _swapchainImages[swapchainImageIndex], _windowExtent, _windowExtent);
+
+    // set swapchain image layout to Present so we can show it on the screen
+    vkutil::transition_image(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
     //finalize the command buffer (we can no longer add commands, but it can now be executed)
     VK_CHECK(vkEndCommandBuffer(cmd));
@@ -617,7 +651,7 @@ void VulkanEngine::init_secondPass_pipeline()
         });
 }
 
-void VulkanEngine::createGraphicsPipeline(const std::string& vertShaderPath, const std::string& fragShaderPath, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout)
+void VulkanEngine::createGPipeline(const std::string& vertShaderPath, const std::string& fragShaderPath, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout)
 {
     auto vertShaderCode = readFile(vertShaderPath);
     auto fragShaderCode = readFile(fragShaderPath);
@@ -685,29 +719,27 @@ void VulkanEngine::createGraphicsPipeline(const std::string& vertShaderPath, con
     depthStencil.minDepthBounds = 0.0f; // Optional
     depthStencil.maxDepthBounds = 1.0f; // Optional
 
-    VkPipelineColorBlendAttachmentState colorBlendAttachments[1] = {};
+    VkPipelineColorBlendAttachmentState colorBlendAttachments[3] = {};
 
     // Configure color blend attachment state for the first attachment
     colorBlendAttachments[0].colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
     colorBlendAttachments[0].blendEnable = VK_FALSE; // No blending for the first attachment
 
     // Configure color blend attachment state for the second attachment
-    //colorBlendAttachments[1].colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-    //colorBlendAttachments[1].blendEnable = VK_FALSE; // No blending for the second attachment
+    colorBlendAttachments[1].colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    colorBlendAttachments[1].blendEnable = VK_FALSE; // No blending for the second attachment
 
-    //// Configure color blend attachment state for the third attachment
-    //colorBlendAttachments[2].colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-    //colorBlendAttachments[2].blendEnable = VK_FALSE; // No blending for the third attachment
+    // Configure color blend attachment state for the third attachment
+    colorBlendAttachments[2].colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    colorBlendAttachments[2].blendEnable = VK_FALSE; // No blending for the third attachment
 
     VkPipelineColorBlendStateCreateInfo colorBlending = {};
     colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
     colorBlending.pNext = nullptr;
     colorBlending.logicOpEnable = VK_FALSE;
     colorBlending.logicOp = VK_LOGIC_OP_COPY;
-    colorBlending.attachmentCount = 1;
+    colorBlending.attachmentCount = 3;
     colorBlending.pAttachments = colorBlendAttachments;
-
-
 
     std::vector<VkDynamicState> dynamicStates = {
         VK_DYNAMIC_STATE_VIEWPORT,
@@ -728,15 +760,14 @@ void VulkanEngine::createGraphicsPipeline(const std::string& vertShaderPath, con
         throw std::runtime_error("failed to create pipeline layout!");
     }
 
-    VkFormat colorAttachmentFormats[1] = { _secondPassImage.imageFormat };
+    VkFormat colorAttachmentFormats[3] = { _gPosition.imageFormat, _gNormal.imageFormat, _gAlbedoSpec.imageFormat };
 
     VkPipelineRenderingCreateInfo rfInfo = {
     .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR,
     .pNext = NULL,
-    .colorAttachmentCount = 1,
+    .colorAttachmentCount = 3,
     .pColorAttachmentFormats = colorAttachmentFormats,
     .depthAttachmentFormat = _depthImage.imageFormat };
-
 
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -821,6 +852,8 @@ void VulkanEngine::init_images()
 
     VkImageUsageFlags drawImageUsages{};
     drawImageUsages |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    drawImageUsages |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    drawImageUsages |= VK_IMAGE_USAGE_STORAGE_BIT;
     drawImageUsages |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
     drawImageUsages |= VK_IMAGE_USAGE_SAMPLED_BIT;
 

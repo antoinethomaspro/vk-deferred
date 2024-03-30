@@ -89,7 +89,6 @@ constexpr unsigned int FRAME_OVERLAP = 2;
 
 class VulkanEngine {
 public:
-	VkExtent2D _windowExtent{ 800 , 600 };
 	GLFWwindow* _window;
 	DeletionQueue _mainDeletionQueue;
 	
@@ -97,19 +96,21 @@ public:
 	VkCommandPool _commandPool;
 	//draw resources
 	AllocatedImage _drawImage;
-	VkExtent2D _drawExtent;
 
 	VkInstance _instance;// Vulkan library handle
 	VkDebugUtilsMessengerEXT _debug_messenger;// Vulkan debug output handle
 	VkPhysicalDevice _chosenGPU;// GPU chosen as the default device
 	VkDevice _device; // Vulkan device for commands
 	VkSurfaceKHR _surface;// Vulkan window surface
+
 	VkSwapchainKHR _swapchain;
 	VkFormat _swapchainImageFormat;
-
+	VkExtent2D _swapchainExtent;
 	std::vector<VkImage> _swapchainImages;
 	std::vector<VkImageView> _swapchainImageViews;
-	VkExtent2D _swapchainExtent;
+
+	VkExtent2D _windowExtent{ 800 , 600 };
+
 	VkQueue _graphicsQueue;
 	uint32_t _graphicsQueueFamily;
 
@@ -169,16 +170,16 @@ private:
 
 	//<-------for DEFERRED------//
 	//>old pipeline
-	void createGraphicsPipeline(const std::string& vertShaderPath, const std::string& fragShaderPath, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout);
+	void createGPipeline(const std::string& vertShaderPath, const std::string& fragShaderPath, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout);
 	VkShaderModule createShaderModule(const std::vector<char>& code);
 	static std::vector<char> readFile(const std::string& filename); //for shader
 	AllocatedImage _depthImage;
 	AllocatedImage _secondPassImage;
 
 	VkPipeline graphicsPipeline;
-	VkPipeline graphicsPipeline2;
+	VkPipeline gPipeline;
 	VkPipelineLayout pipelineLayout;
-	VkPipelineLayout pipelineLayout2;
+	VkPipelineLayout gPipelineLayout;
 
 	//<old pipeline
 
