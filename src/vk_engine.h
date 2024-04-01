@@ -149,6 +149,10 @@ private:
 
 	MyCamera _camera;
 
+	void createPointLightPipeline(const std::string& vertShaderPath, const std::string& fragShaderPath, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout);
+	VkPipeline pointLightPipeline;
+	VkPipelineLayout pointLightPipelineLayout;
+
 	//>------for DEFERRED-------//
 	AllocatedImage _gPosition;
 	AllocatedImage _gNormal;
@@ -156,7 +160,7 @@ private:
 
 	DescriptorAllocator globalDescriptorAllocator;
 	VkDescriptorSet _drawImageDescriptorSet;
-	VkDescriptorSetLayout _drawImageDescriptorLayout;
+	
 
 	VkSampler _defaultSamplerLinear;
 	VkSampler _defaultSamplerNearest;
@@ -196,8 +200,9 @@ private:
 
 	glm::mat4 setPerspectiveProjection(float fovy, float aspect, float near, float far);
 
-	VkDescriptorSetLayout descriptorSetLayout;
-	VkDescriptorSetLayout descriptorSetLayout2;
+	VkDescriptorSetLayout descriptorSetLayout; //contains 1 global ubo
+	VkDescriptorSetLayout descriptorSetLayout2; //contains 1 object ubo
+	VkDescriptorSetLayout _drawImageDescriptorLayout; //contains 3 images
 
 	VkDescriptorPool descriptorPool;
 	std::vector<VkDescriptorSet> descriptorSets;
