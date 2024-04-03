@@ -21,28 +21,7 @@ float specularStrength = 0.5;
 
 void main()
 {
-    // Visualize the gPosition buffer
-    vec3 FragPos = texture(gPosition, outUV).rgb;
-    vec3 Normal = texture(gNormal, outUV).rgb;
-    vec3 Albedo = texture(gAlbedoSpec, outUV).rgb;
-
-    //----------computing light------------//
-    vec3 ambient = ambientStrength * lightColor; 
-    vec3 lightPos = ubo1.model[3].xyz;
-    vec3 norm = Normal;
-    vec3 lightDir = normalize(lightPos - FragPos);   
-
-    float diff = max(dot(norm, lightDir), 0.0);
-    vec3 diffuse = diff * lightColor;
-
-    //specular
-    vec3 cameraPosWorld = ubo1.inverseView[3].xyz;
-    vec3 viewDir = normalize(cameraPosWorld - FragPos);
-    vec3 reflectDir = reflect(-lightDir, norm);  
-    float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32);
-    vec3 specular = specularStrength * spec * lightColor;  
-
-    vec3 result1 = (ambient + diffuse + specular) * Albedo;
-    FragColor = vec4(result1, 1.0);
+    vec3 color = vec3(1.0, 0.0, 0.0);
+    FragColor = vec4(color, 1.0);
     
 }

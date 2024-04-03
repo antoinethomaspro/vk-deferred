@@ -70,8 +70,8 @@ void VulkanEngine::init()
 
  //   createForwardPipeline("../shaders/forwardLightVert.spv", "../shaders/forwardLightFrag.spv", forwardPipelineLight, forwardPipelineLightLayout);
  //   createForwardPipeline("../shaders/forwardVert.spv", "../shaders/forwardFrag.spv", forwardPipeline, forwardPipelineLayout);
-    createGPipeline("../shaders/vert.spv", "../shaders/frag.spv", gPipeline, gPipelineLayout);
-    createPointLightPipeline("../shaders/point_light_vert.spv", "../shaders/point_light_frag.spv", pointLightPipeline, pointLightPipelineLayout);
+    createGPipeline("../shaders/vert.spv", "../shaders/frag.spv", gPipeline, gPipelineLayout); //+ fill the stencil/depth buffer
+    createPointLightPipeline("../shaders/vertMulti.spv", "../shaders/fragMulti.spv", pointLightPipeline, pointLightPipelineLayout);
    // init_secondPass_pipeline();
 
 
@@ -137,21 +137,23 @@ void VulkanEngine::draw()
     vkutil::transition_image(cmd, _gAlbedoSpec.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
    
     //depth image transition
-    vkutil::transition_image(cmd, _depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+    vkutil::transition_image(cmd, _depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
     VkClearValue clearColor1;
     clearColor1.color = { 0.0f, 0.0f, 0.0f, 0.0f };
     VkClearValue clearColor2;
-    clearColor2.color = { 0.0f, 1.0f, 0.0f, 0.0f };
+    clearColor2.color = { 0.0f, 0.0f, 0.0f, 0.0f };
     VkClearValue clearColor3;
-    clearColor3.color = { 0.0f, 0.0f, 1.0f, 0.0f };
+    clearColor3.color = { 0.0f, 0.0f, 0.0f, 0.0f };
     VkRenderingAttachmentInfo colorAttachment1 = vkinit::attachment_info(_gPosition.imageView, &clearColor1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
     VkRenderingAttachmentInfo colorAttachment2 = vkinit::attachment_info(_gNormal.imageView, &clearColor1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
     VkRenderingAttachmentInfo colorAttachment3 = vkinit::attachment_info(_gAlbedoSpec.imageView, &clearColor1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
     VkRenderingAttachmentInfo colorAttachments[3] = { colorAttachment1, colorAttachment2, colorAttachment3 };
 
-    VkRenderingAttachmentInfo depthAttachment = vkinit::depth_attachment_info(_depthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-    VkRenderingInfo renderInfo = vkinit::rendering_info(_windowExtent, colorAttachments, &depthAttachment, 3);
+    VkRenderingAttachmentInfo depthAttachment = vkinit::depth_attachment_info(_depthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+    VkRenderingAttachmentInfo stencilAttachment = vkinit::stencil_attachment_info(_depthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+
+    VkRenderingInfo renderInfo = vkinit::rendering_info(_windowExtent, colorAttachments, &depthAttachment, &stencilAttachment, 3);
     vkCmdBeginRendering(cmd, &renderInfo);
 
     VkDescriptorSet descriptorSetsArray[] = {
@@ -188,13 +190,15 @@ void VulkanEngine::draw()
     //second pass !!!!!!!!!!!!!!!!!!!!!!!
     vkutil::transition_image(cmd, _secondPassImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-    vkutil::transition_image(cmd, _gNormal.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
     vkutil::transition_image(cmd, _gPosition.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    vkutil::transition_image(cmd, _gNormal.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     vkutil::transition_image(cmd, _gAlbedoSpec.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
     VkRenderingAttachmentInfo secondPassColorAttachment = vkinit::attachment_info(_secondPassImage.imageView, &clearColor1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    VkRenderingAttachmentInfo stencilReadAttachment = vkinit::stencil_read_attachment_info(_depthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
-    VkRenderingInfo secondPassRenderInfo = vkinit::rendering_info(_windowExtent, &secondPassColorAttachment, nullptr, 1);
+    VkRenderingInfo secondPassRenderInfo = vkinit::rendering_info(_windowExtent, &secondPassColorAttachment, nullptr, &stencilReadAttachment, 1);
     vkCmdBeginRendering(cmd, &secondPassRenderInfo);
     vkCmdSetViewport(cmd, 0, 1, &viewport);
     vkCmdSetScissor(cmd, 0, 1, &scissor);
@@ -217,14 +221,15 @@ void VulkanEngine::draw()
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pointLightPipeline);
 
-    VkBuffer vertexBuffers[] = { vertexBufferLight };
+   /* VkBuffer vertexBuffers[] = { vertexBufferLight };
     VkDeviceSize offsets[] = { 0 };
 
     vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
 
-    vkCmdBindIndexBuffer(cmd, indexBufferLight, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdBindIndexBuffer(cmd, indexBufferLight, 0, VK_INDEX_TYPE_UINT32);*/
 
-    vkCmdDrawIndexed(cmd, static_cast<uint32_t>(_indicesLight.size()), 1, 0, 0, 0);
+  //  vkCmdDrawIndexed(cmd, static_cast<uint32_t>(_indicesLight.size()), 1, 0, 0, 0);
+    vkCmdDraw(cmd, 3, 1, 0, 0);
 
     vkCmdEndRendering(cmd);
 
@@ -392,7 +397,7 @@ void VulkanEngine::init_swapchain()
 
 
     //depth image creation
-    _depthImage.imageFormat = VK_FORMAT_D32_SFLOAT;
+    _depthImage.imageFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;
     _depthImage.imageExtent = drawImageExtent;
     VkImageUsageFlags depthImageUsages{};
     depthImageUsages |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
@@ -403,7 +408,7 @@ void VulkanEngine::init_swapchain()
     vmaCreateImage(_allocator, &dimg_info, &rimg_allocinfo, &_depthImage.image, &_depthImage.allocation, nullptr);
 
     //build a image-view for the draw image to use for rendering
-    VkImageViewCreateInfo dview_info = vkinit::imageview_create_info(_depthImage.imageFormat, _depthImage.image, VK_IMAGE_ASPECT_DEPTH_BIT);
+    VkImageViewCreateInfo dview_info = vkinit::imageview_create_info(_depthImage.imageFormat, _depthImage.image, VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT);
 
     VK_CHECK(vkCreateImageView(_device, &dview_info, nullptr, &_depthImage.imageView));
 
@@ -540,6 +545,7 @@ void VulkanEngine::init_descriptors()
         builder.add_binding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
         builder.add_binding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
         builder.add_binding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+
         _drawImageDescriptorLayout = builder.build(_device, VK_SHADER_STAGE_FRAGMENT_BIT);
     }
 
@@ -593,7 +599,7 @@ void VulkanEngine::init_descriptors()
     albedoTextureWrite.pImageInfo = &albedoImgInfo;
 
     // Update the descriptor set with both texture information
-    std::array<VkWriteDescriptorSet, 3> descriptorWrites = { normalTextureWrite, positionTextureWrite, albedoTextureWrite };
+    std::array<VkWriteDescriptorSet, 3> descriptorWrites = { positionTextureWrite, normalTextureWrite, albedoTextureWrite };
     vkUpdateDescriptorSets(_device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 
     _mainDeletionQueue.push_function([&]() {
@@ -861,15 +867,25 @@ void VulkanEngine::createPointLightPipeline(const std::string& vertShaderPath, c
     multisampling.sampleShadingEnable = VK_FALSE;
     multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
+    VkStencilOpState stencilOpState{};
+    stencilOpState.failOp = VK_STENCIL_OP_KEEP; // Operation to perform if stencil test fails
+    stencilOpState.passOp = VK_STENCIL_OP_KEEP; // Operation to perform if both depth and stencil tests pass
+    stencilOpState.depthFailOp = VK_STENCIL_OP_KEEP; // What to write in stencil if depth test fails but stencil test passes
+    stencilOpState.compareOp = VK_COMPARE_OP_EQUAL; // equal: if equal to ref value (zero), passes the test
+    stencilOpState.compareMask = 0xFF; // Mask to apply to the stencil buffer value before comparison
+    stencilOpState.writeMask = 0xFF; // Mask to apply to the stencil buffer when writing
+    stencilOpState.reference = 0; // Reference value used in stencil buffer comparison
+
     VkPipelineDepthStencilStateCreateInfo depthStencil{};
     depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-    depthStencil.depthTestEnable = VK_TRUE;
-    depthStencil.depthWriteEnable = VK_TRUE;
+    depthStencil.depthTestEnable = VK_FALSE;
+    depthStencil.depthWriteEnable = VK_FALSE;
     depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
     depthStencil.depthBoundsTestEnable = VK_FALSE;
-    depthStencil.stencilTestEnable = VK_FALSE;
-    depthStencil.minDepthBounds = 0.0f; // Optional
-    depthStencil.maxDepthBounds = 1.0f; // Optional
+    depthStencil.stencilTestEnable = VK_TRUE;
+    depthStencil.front = stencilOpState; // Stencil test configuration for front-facing triangles
+    depthStencil.back = stencilOpState; // Stencil test configuration for back-facing triangles (if needed)
+
 
     VkPipelineColorBlendAttachmentState colorBlendAttachment{};
     colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
@@ -909,7 +925,7 @@ void VulkanEngine::createPointLightPipeline(const std::string& vertShaderPath, c
     _renderInfo = { .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO };
     _renderInfo.colorAttachmentCount = 1;
     _renderInfo.pColorAttachmentFormats = &_secondPassImage.imageFormat;
-    _renderInfo.depthAttachmentFormat = _depthImage.imageFormat;
+    _renderInfo.stencilAttachmentFormat = _depthImage.imageFormat;
 
 
     VkGraphicsPipelineCreateInfo pipelineInfo{};
@@ -991,7 +1007,7 @@ void VulkanEngine::createGPipeline(const std::string& vertShaderPath, const std:
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
     rasterizer.lineWidth = 1.0f;
-    rasterizer.cullMode = VK_CULL_MODE_NONE;
+    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
     rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     rasterizer.depthBiasEnable = VK_FALSE;
 
@@ -1000,15 +1016,29 @@ void VulkanEngine::createGPipeline(const std::string& vertShaderPath, const std:
     multisampling.sampleShadingEnable = VK_FALSE;
     multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
+    //---stencil
+    VkStencilOpState frontTest{};
+    frontTest.failOp = VK_STENCIL_OP_KEEP;
+    frontTest.passOp = VK_STENCIL_OP_INCREMENT_AND_WRAP;
+    frontTest.depthFailOp = VK_STENCIL_OP_INCREMENT_AND_WRAP;
+    frontTest.compareOp = VK_COMPARE_OP_ALWAYS; //always evaluates to true
+    frontTest.compareMask = 0xFF;
+    frontTest.writeMask = 0xFF;
+    frontTest.reference = 0;
+    VkStencilOpState backTest = frontTest;
+    backTest.depthFailOp = VK_STENCIL_OP_INCREMENT_AND_WRAP;
+
     VkPipelineDepthStencilStateCreateInfo depthStencil{};
     depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
     depthStencil.depthTestEnable = VK_TRUE;
     depthStencil.depthWriteEnable = VK_TRUE;
     depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
     depthStencil.depthBoundsTestEnable = VK_FALSE;
-    depthStencil.stencilTestEnable = VK_FALSE;
-    depthStencil.minDepthBounds = 0.0f; // Optional
-    depthStencil.maxDepthBounds = 1.0f; // Optional
+    depthStencil.stencilTestEnable = VK_TRUE;
+    depthStencil.front = frontTest;
+
+
+    //--------------------
 
     VkPipelineColorBlendAttachmentState colorBlendAttachments[3] = {};
 
@@ -1058,7 +1088,8 @@ void VulkanEngine::createGPipeline(const std::string& vertShaderPath, const std:
     .pNext = NULL,
     .colorAttachmentCount = 3,
     .pColorAttachmentFormats = colorAttachmentFormats,
-    .depthAttachmentFormat = _depthImage.imageFormat };
+    .depthAttachmentFormat = _depthImage.imageFormat,
+    .stencilAttachmentFormat = _depthImage.imageFormat };
 
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;

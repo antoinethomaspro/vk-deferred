@@ -157,10 +157,39 @@ VkRenderingAttachmentInfo vkinit::depth_attachment_info(
 
     return depthAttachment;
 }
+
+VkRenderingAttachmentInfo vkinit::stencil_attachment_info(VkImageView view, VkImageLayout layout)
+{
+    VkRenderingAttachmentInfo depthAttachment{};
+    depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+    depthAttachment.pNext = nullptr;
+
+    depthAttachment.imageView = view;
+    depthAttachment.imageLayout = layout;
+    depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    depthAttachment.clearValue.depthStencil.stencil = 0;
+
+    return depthAttachment;
+}
+
+VkRenderingAttachmentInfo vkinit::stencil_read_attachment_info(VkImageView view, VkImageLayout layout)
+{
+    VkRenderingAttachmentInfo depthAttachment{};
+    depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+    depthAttachment.pNext = nullptr;
+
+    depthAttachment.imageView = view;
+    depthAttachment.imageLayout = layout;
+    depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+    depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+
+    return depthAttachment;
+}
 //< depth_info
 //> render_info
 VkRenderingInfo vkinit::rendering_info(VkExtent2D renderExtent, VkRenderingAttachmentInfo* colorAttachment,
-    VkRenderingAttachmentInfo* depthAttachment, uint32_t colorAttachmentCount)
+    VkRenderingAttachmentInfo* depthAttachment, VkRenderingAttachmentInfo* stencilAttachment, uint32_t colorAttachmentCount)
 {
     VkRenderingInfo renderInfo{};
     renderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -171,7 +200,7 @@ VkRenderingInfo vkinit::rendering_info(VkExtent2D renderExtent, VkRenderingAttac
     renderInfo.colorAttachmentCount = colorAttachmentCount;
     renderInfo.pColorAttachments = colorAttachment;
     renderInfo.pDepthAttachment = depthAttachment;
-    renderInfo.pStencilAttachment = nullptr;
+    renderInfo.pStencilAttachment = stencilAttachment;
 
     return renderInfo;
 }

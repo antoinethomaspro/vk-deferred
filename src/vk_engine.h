@@ -184,6 +184,7 @@ private:
 	VkShaderModule createShaderModule(const std::vector<char>& code);
 	static std::vector<char> readFile(const std::string& filename); //for shader
 	AllocatedImage _depthImage;
+	VkImageView _stencilView;
 	AllocatedImage _secondPassImage;
 
 	VkPipeline graphicsPipeline;
