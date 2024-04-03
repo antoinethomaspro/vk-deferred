@@ -149,6 +149,10 @@ private:
 
 	MyCamera _camera;
 
+	void createStencilPipeline(const std::string& vertShaderPath, const std::string& fragShaderPath, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout);
+	VkPipeline stencilPipeline;
+	VkPipelineLayout stencilPipelineLayout;
+
 	void createForwardPipeline(const std::string& vertShaderPath, const std::string& fragShaderPath, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout);
 	VkPipeline forwardPipeline;
 	VkPipelineLayout forwardPipelineLayout;
