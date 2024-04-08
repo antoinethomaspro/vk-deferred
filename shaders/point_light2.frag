@@ -41,8 +41,8 @@ void main()
 {
     //define the point light processed
     Light pLight;
-    pLight.position = vec3(0.0, 0.0, -2.0); //same as our light object
-    pLight.color = vec3(1.0, 0.0, 0.0); // red
+    pLight.position = vec3(0.0, 0.0, -1.0); //same as our light object
+    pLight.color = vec3(0.0, 1.0, 0.0); // red
 
     //attenuation factor
     float distance = length(pLight.position - fragPosWorld);

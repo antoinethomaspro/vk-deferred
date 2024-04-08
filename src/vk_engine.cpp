@@ -68,12 +68,12 @@ void VulkanEngine::init()
     init_sync_structures();
     init_descriptors();
 
- //   createForwardPipeline("../shaders/forwardLightVert.spv", "../shaders/forwardLightFrag.spv", forwardPipelineLight, forwardPipelineLightLayout);
- //   createForwardPipeline("../shaders/forwardVert.spv", "../shaders/forwardFrag.spv", forwardPipeline, forwardPipelineLayout);
+  //  createForwardPipeline("../shaders/forwardVert.spv", "../shaders/forwardFrag.spv", forwardPipeline, forwardPipelineLayout);
     createGPipeline("../shaders/vert.spv", "../shaders/frag.spv", gPipeline, gPipelineLayout); //+ fills depth buffer
-    createStencilPipeline("../shaders/point_light_vert.spv", "../shaders/forwardLightFrag.spv", stencilPipeline, stencilPipelineLayout); //fills the stencil buffer
-    createPointLightPipeline("../shaders/vertMulti.spv", "../shaders/fragMulti.spv", pointLightPipeline, pointLightPipelineLayout);
-   // init_secondPass_pipeline();
+  //  createStencilPipeline("../shaders/point_light_vert.spv", "../shaders/forwardLightFrag.spv", stencilPipeline, stencilPipelineLayout); //fills the stencil buffer
+    createPointLightPipeline("../shaders/point_light_vert.spv", "../shaders/point_light_frag.spv", pointLightPipeline, pointLightPipelineLayout);
+    createPointLightPipeline("../shaders/point_light_vert2.spv", "../shaders/point_light_frag2.spv", pointLightPipeline_, pointLightPipelineLayout_);
+    createPointLightPipeline("../shaders/vertMulti.spv", "../shaders/fragMulti.spv", pointLightPipeline2, pointLightPipelineLayout2);
 
 
     // everything went fine
@@ -132,25 +132,22 @@ void VulkanEngine::draw()
     scissor.extent = _windowExtent;
     vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-    //make the gbuffer images transition
+    //prepare attachments for g buffer
     vkutil::transition_image(cmd, _gPosition.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
     vkutil::transition_image(cmd, _gNormal.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
     vkutil::transition_image(cmd, _gAlbedoSpec.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-   
+
     //depth image transition
     vkutil::transition_image(cmd, _depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
     VkClearValue clearColor1;
     clearColor1.color = { 0.0f, 0.0f, 0.0f, 0.0f };
-    VkClearValue clearColor2;
-    clearColor2.color = { 0.0f, 0.0f, 0.0f, 0.0f };
-    VkClearValue clearColor3;
-    clearColor3.color = { 0.0f, 0.0f, 0.0f, 0.0f };
+
     VkRenderingAttachmentInfo colorAttachment1 = vkinit::attachment_info(_gPosition.imageView, &clearColor1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
     VkRenderingAttachmentInfo colorAttachment2 = vkinit::attachment_info(_gNormal.imageView, &clearColor1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
     VkRenderingAttachmentInfo colorAttachment3 = vkinit::attachment_info(_gAlbedoSpec.imageView, &clearColor1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-    VkRenderingAttachmentInfo colorAttachments[3] = { colorAttachment1, colorAttachment2, colorAttachment3 };
 
+    VkRenderingAttachmentInfo colorAttachments[3] = { colorAttachment1, colorAttachment2, colorAttachment3 };
     VkRenderingAttachmentInfo depthAttachmentWrite = vkinit::depthw_attachment_info(_depthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
     VkRenderingInfo renderInfo = vkinit::rendering_info(_windowExtent, colorAttachments, &depthAttachmentWrite, nullptr, 3);
@@ -174,50 +171,27 @@ void VulkanEngine::draw()
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, gPipeline);
 
-    // Bind vertex buffer for the second mesh
+    // Bind vertex buffer for the objects mesh
     VkBuffer vertexBuffers2[] = { vertexBufferObject }; // Assuming vertexBufferObject holds the vertex data for the second mesh
     VkDeviceSize offsets2[] = { 0 };
-
     vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers2, offsets2);
-
-    // Bind index buffer for the second mesh
     vkCmdBindIndexBuffer(cmd, indexBufferObject, 0, VK_INDEX_TYPE_UINT32); // Assuming indexBufferObject holds the index data for the second mesh
-
-    // Draw the second mesh
     vkCmdDrawIndexed(cmd, static_cast<uint32_t>(_indicesObject.size()), 3, 0, 0, 0); // Assuming _indicesObject.size() holds the number of indices for the second mesh
+
     vkCmdEndRendering(cmd);
 
-    //second pass, aka stencil pass => we only need the depth buffer to read into, a stencil buffer to write into + to draw a sphere
+    //second pass, aka point light pass 
     vkutil::transition_image(cmd, _secondPassImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-    VkRenderingAttachmentInfo secondPassColorAttachment = vkinit::attachment_info(_secondPassImage.imageView, &clearColor1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-    VkRenderingAttachmentInfo depthAttachmentRead = vkinit::depthr_attachment_info(_depthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-    VkRenderingAttachmentInfo stencilAttachmentWrite = vkinit::stencil_attachment_info(_depthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-
-    VkRenderingInfo stencilPassRenderInfo = vkinit::rendering_info(_windowExtent, &secondPassColorAttachment, &depthAttachmentRead, &stencilAttachmentWrite, 1);
-    vkCmdBeginRendering(cmd, &stencilPassRenderInfo);
-
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, stencilPipeline);
-
-    VkBuffer vertexBuffers[] = { vertexBufferLight };
-    VkDeviceSize offsets[] = { 0 };
-    vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
-    vkCmdBindIndexBuffer(cmd, indexBufferLight, 0, VK_INDEX_TYPE_UINT32);
-
-    vkCmdDrawIndexed(cmd, static_cast<uint32_t>(_indicesLight.size()), 1, 0, 0, 0);
-    vkCmdEndRendering(cmd);
-
-    //third pass, aka point light pass 
-    //vkutil::transition_image(cmd, _secondPassImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
     vkutil::transition_image(cmd, _gPosition.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     vkutil::transition_image(cmd, _gNormal.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     vkutil::transition_image(cmd, _gAlbedoSpec.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-    VkRenderingAttachmentInfo thirdPassColorAttachment = vkinit::attachment_info(_secondPassImage.imageView, &clearColor1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-    VkRenderingAttachmentInfo stencilReadAttachment = vkinit::stencil_read_attachment_info(_depthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+    VkRenderingAttachmentInfo pointLightPassColorAttachment = vkinit::attachment_info(_secondPassImage.imageView, &clearColor1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-    VkRenderingInfo secondPassRenderInfo = vkinit::rendering_info(_windowExtent, &thirdPassColorAttachment, nullptr, &stencilReadAttachment, 1);
-    vkCmdBeginRendering(cmd, &secondPassRenderInfo);
+    VkRenderingInfo pointLightPassRenderInfo = vkinit::rendering_info(_windowExtent, &pointLightPassColorAttachment, nullptr, nullptr, 1);
+
+    vkCmdBeginRendering(cmd, &pointLightPassRenderInfo);
     vkCmdSetViewport(cmd, 0, 1, &viewport);
     vkCmdSetScissor(cmd, 0, 1, &scissor);
 
@@ -238,6 +212,21 @@ void VulkanEngine::draw()
     );
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pointLightPipeline);
+
+    VkBuffer vertexBuffers[] = { vertexBufferLight };
+    VkDeviceSize offsets[] = { 0 };
+    vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
+    vkCmdBindIndexBuffer(cmd, indexBufferLight, 0, VK_INDEX_TYPE_UINT32);
+
+    vkCmdDrawIndexed(cmd, static_cast<uint32_t>(_indicesLight.size()), 1, 0, 0, 0);
+
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pointLightPipeline_);
+
+    vkCmdDrawIndexed(cmd, static_cast<uint32_t>(_indicesLight.size()), 1, 0, 0, 0);
+
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pointLightPipeline_);
+
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pointLightPipeline2);
 
     vkCmdDraw(cmd, 3, 1, 0, 0);
 
@@ -657,7 +646,7 @@ void VulkanEngine::init_secondPass_pipeline()
     //no multisampling
     pipelineBuilder.set_multisampling_none();
     //no blending
-    pipelineBuilder.disable_blending();
+    pipelineBuilder.enable_blending_additive();
     //no depth testing
     pipelineBuilder.disable_depthtest();
 
@@ -1190,7 +1179,7 @@ void VulkanEngine::createPointLightPipeline(const std::string& vertShaderPath, c
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
     rasterizer.lineWidth = 1.0f;
-    rasterizer.cullMode = VK_CULL_MODE_NONE;
+    rasterizer.cullMode = VK_CULL_MODE_FRONT_BIT;
     rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     rasterizer.depthBiasEnable = VK_FALSE;
 
@@ -1214,14 +1203,20 @@ void VulkanEngine::createPointLightPipeline(const std::string& vertShaderPath, c
     depthStencil.depthWriteEnable = VK_FALSE;
     depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
     depthStencil.depthBoundsTestEnable = VK_FALSE;
-    depthStencil.stencilTestEnable = VK_TRUE;
+    depthStencil.stencilTestEnable = VK_FALSE;
     depthStencil.front = stencilOpState; // Stencil test configuration for front-facing triangles
     depthStencil.back = stencilOpState; // Stencil test configuration for back-facing triangles (if needed)
 
 
     VkPipelineColorBlendAttachmentState colorBlendAttachment{};
     colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-    colorBlendAttachment.blendEnable = VK_FALSE;
+    colorBlendAttachment.blendEnable = VK_TRUE;
+    colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+    colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+    colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+    colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
 
     VkPipelineColorBlendStateCreateInfo colorBlending{};
     colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
@@ -1471,6 +1466,7 @@ void VulkanEngine::updateUniformBuffer(uint32_t currentImage, const MyCamera& ca
 {
     UniformBufferObject ubo{};
     ubo.model = glm::mat4(1.f); //model for light pos
+    ubo.model = glm::scale(ubo.model, glm::vec3(7.f));
     ubo.model[3] = pos;
 
     //ubo.view = glm::translate(glm::mat4(1.f), glm::vec3(0.f, 0.f, -4.f));

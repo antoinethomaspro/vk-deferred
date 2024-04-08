@@ -34,13 +34,13 @@ mat4 translateMatrix(vec3 translation) {
 
 void main() {
 
-     vec3 translation1 = vec3(0.0, 0.0, 0.0); // Example translation vector
+     vec3 translation1 = vec3(0.0, 0.0, 2.0); // Example translation vector
     mat4 translationMatrix1 = translateMatrix(translation1);
 
     vec3 translation2 = vec3(0.0, 1.0, -2.0); // Example translation vector
     mat4 translationMatrix2 = translateMatrix(translation2);
 
-     vec3 translation3 = vec3(0.0, 0.0, -4.0); // Example translation vector
+    vec3 translation3 = vec3(0.0, 0.0, -4.0); // Example translation vector
     mat4 translationMatrix3 = translateMatrix(translation3);
 
      // Hardcoded transformation matrices for two instances

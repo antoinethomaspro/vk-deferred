@@ -11,41 +11,71 @@ layout(location = 0) in vec3 vertColor;
 layout(location = 1) in vec3 fragPosWorld;
 layout(location = 2) in vec3 fragNormalWorld;
 
-layout (location = 0) out vec4 fragColor0; //white
-layout (location = 1) out vec4 fragColor1; //red
-layout (location = 2) out vec4 fragColor2; //blue
+layout (location = 0) out vec4 fragColor; 
 
-const vec3 DIRECTION_TO_LIGHT = normalize(vec3(0.0, 0.0, -10.0));
-const float ambientStrength  = 0.02;
-const vec3 lightColor = vec3(1.0);
+struct Light {
+    vec3 position;
+    vec3 color;
+};
+
+const int NUM_LIGHTS = 2; // Define the number of lights
+
+const float ambientStrength  = 0.01;
+const vec3 ambientColor = vec3(1.0);
 float specularStrength = 0.5;
 
-void main() { 
+//variables for all lights: 
+vec3 norm = normalize(fragNormalWorld);
+vec3 cameraPosWorld = ubo1.inverseView[3].xyz;
+vec3 viewDir = normalize(cameraPosWorld - fragPosWorld);
 
-    vec3 ambient = ambientStrength * lightColor; 
 
-    vec3 lightPos = ubo1.model[3].xyz;
-    vec3 norm = normalize(fragNormalWorld);
-    vec3 lightDir = normalize(lightPos - fragPosWorld);   
+vec3 computePointLight(vec3 lightPos, vec3 lightColor)
+{
+    //attenuation factor
+    float distance = length(lightPos - fragPosWorld);
+    float attenuation = 1.0 / (1.0+ 0.07 * distance + 1.8 * (distance * distance));  
 
+    vec3 lightDir = normalize(lightPos - fragPosWorld);
+
+    //diff
     float diff = max(dot(norm, lightDir), 0.0);
     vec3 diffuse = diff * lightColor;
     
-    //vec3 result = (ambient + diff) * vertColor;
-    //fragColor = vec4(result, 1.0);
-
     //specular
-    vec3 cameraPosWorld = ubo1.inverseView[3].xyz;
-    vec3 viewDir = normalize(cameraPosWorld - fragPosWorld);
     vec3 reflectDir = reflect(-lightDir, norm);  
     float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32);
-    vec3 specular = specularStrength * spec * lightColor;  
+    vec3 specular = specularStrength * spec * lightColor; 
 
-    vec3 result1 = (ambient + diffuse + specular) * vertColor;
-    vec3 result2 = (ambient + diffuse + specular) * vec3(1.0, 0.0, 0.0);
-    vec3 result3 = (ambient + diffuse + specular) * vec3(0.0, 0.0, 1.0);
-    fragColor0 = vec4(result1, 1.0);
-    fragColor1 = vec4(result2, 1.0);
-    fragColor2 = vec4(result3, 1.0);
+    diffuse  *= attenuation;
+    specular *= attenuation; 
+
+    return (diffuse + specular) * vertColor; 
+}
+
+void main() { 
+    vec3 finalColor = vec3(0.0); // Initialize final color
+
+    // Define an array of lights and initialize it with one hardcoded light
+    Light lights[NUM_LIGHTS];
+    lights[0].position = vec3(0.0, 0.0, -2.0); // Hardcoded light position
+    lights[0].color = vec3(1.0, 0.0, 0.0); // Red color
+    lights[1].position = vec3(0.0, 0.0, -1.0); // Hardcoded light position
+    lights[1].color = vec3(0.0, 1.0, 0.0); // Red color
+
+    for (int i = 0; i < NUM_LIGHTS; ++i) {
+        vec3 lightPos = lights[i].position;
+        vec3 lightColor = lights[i].color;
+
+        // Compute light contribution for this point light
+        vec3 lightContribution = computePointLight(lightPos, lightColor);
+
+        // Accumulate the light contribution
+        finalColor += lightContribution;
+    }
+
+    vec3 ambient = ambientStrength * ambientColor; 
+    // Add ambient light to the final color
+    fragColor = vec4(ambient + finalColor, 1.0);
     
 }

@@ -161,7 +161,12 @@ private:
 
 	void createPointLightPipeline(const std::string& vertShaderPath, const std::string& fragShaderPath, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout);
 	VkPipeline pointLightPipeline;
+	VkPipeline pointLightPipeline_;
+	VkPipeline pointLightPipeline2;
+
 	VkPipelineLayout pointLightPipelineLayout;
+	VkPipelineLayout pointLightPipelineLayout_;
+	VkPipelineLayout pointLightPipelineLayout2;
 
 	//>------for DEFERRED-------//
 	AllocatedImage _gPosition;

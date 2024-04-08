@@ -18,8 +18,6 @@ layout (location = 2) out vec4 gAlbedoSpec; //blue
 void main() { 
     gPosition = fragPosWorld;
     gNormal = normalize(fragNormalWorld);
-    //gNormal = vec3(gl_FragCoord.z);
-    gAlbedoSpec.rgb = vec3(1.0, 0.0, 0.0); //red color
+    gAlbedoSpec.rgb = vertColor; 
     gAlbedoSpec.a = 0.5;
-    
 }

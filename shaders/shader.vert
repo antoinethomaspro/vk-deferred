@@ -32,12 +32,23 @@ mat4 translateMatrix(vec3 translation) {
     );
 }
 
+mat4 uniformScaleMat4(mat4 originalMatrix, float scaleFactor) {
+    return originalMatrix * mat4(
+        scaleFactor, 0.0, 0.0, 0.0,
+        0.0, scaleFactor, 0.0, 0.0,
+        0.0, 0.0, scaleFactor, 0.0,
+        0.0, 0.0, 0.0, 1.0
+    );
+}
+
 void main() {
      vec3 translation1 = vec3(0.0, 0.0, 0.0); // Example translation vector
     mat4 translationMatrix1 = translateMatrix(translation1);
+    translationMatrix1 = uniformScaleMat4(translationMatrix1, 1.0);
 
     vec3 translation2 = vec3(0.0, 1.0, -2.0); // Example translation vector
     mat4 translationMatrix2 = translateMatrix(translation2);
+    translationMatrix2 = uniformScaleMat4(translationMatrix2, 1.0);
 
      vec3 translation3 = vec3(0.0, 0.0, -4.0); // Example translation vector
     mat4 translationMatrix3 = translateMatrix(translation3);
@@ -49,9 +60,6 @@ void main() {
     mvp_matrix[2] = translationMatrix3; // Identity matrix for instance 2
 
     mat4 transformationMatrix = mvp_matrix[gl_InstanceIndex];
-
-
-
 
     gl_Position = ubo1.proj * ubo1.view * transformationMatrix * vec4(inPosition, 1.0);
     
