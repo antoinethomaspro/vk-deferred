@@ -9,6 +9,11 @@ layout (set=0, binding=0) uniform UniformBufferObject {
     mat4 inverseView;
 } ubo1;
 
+layout(push_constant) uniform Push{
+    vec3 offset;
+    vec3 color;
+} push;
+
 struct Light {
     vec3 position;
     vec3 color;
@@ -41,8 +46,8 @@ void main()
 {
     //define the point light processed
     Light pLight;
-    pLight.position = vec3(0.0, 0.0, -2.0); //same as our light object
-    pLight.color = vec3(1.0, 0.0, 0.0); // red
+    pLight.position = push.offset; //same as our light object
+    pLight.color = push.color; // red
 
     //attenuation factor
     float distance = length(pLight.position - fragPosWorld);

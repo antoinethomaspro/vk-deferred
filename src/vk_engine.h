@@ -76,6 +76,11 @@ struct DeletionQueue
 	}
 };
 
+struct LPushConstantData {
+	glm::vec3 offset;
+	alignas(16) glm::vec3 color;
+};
+
 
 struct FrameData {
 	VkSemaphore _swapchainSemaphore, _renderSemaphore;
