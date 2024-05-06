@@ -1,7 +1,8 @@
 
 ### Deferred rendering on Vulkan
 
-Basic renderer that implements the old way of doing deferred shading
+Basic renderer that implements the old way of doing deferred shading.
+We render light volumes on top of a g-buffer and light is accumulated per-light by blending on top of the frame buffer.
 
 * normal buffer
 ![](screenshots/normals.png)
