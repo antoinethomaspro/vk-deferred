@@ -3,8 +3,9 @@
 
 Basic renderer that implements the old way of doing deferred shading.
 We render light volumes on top of a g-buffer and light is accumulated per-light by blending on top of the frame buffer.
-
+<br/><br/>
 * normal buffer
+  <br/><br/>
 ![](screenshots/normals.png)
 
 * shading point lights with rasterized spheres
